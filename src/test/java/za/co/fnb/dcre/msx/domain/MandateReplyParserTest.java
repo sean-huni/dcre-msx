@@ -8,7 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
- * Pure-parser proofs against the synthetic pain.012 leg shape (fint_sim_reply.py):
+ * Pure-parser proofs against the synthetic pain.012 SBSR leg shape (fint_sim_reply.py):
  * the four correlation/verdict fields are mandatory, Rsn is optional, and the
  * current contract carries no EndToEndId so e2e parses NULL (nullable-but-expected,
  * captured opportunistically when a future reply shape does carry it).
@@ -17,7 +17,7 @@ class MandateReplyParserTest {
 
     @Test
     void parsesAcceptLegWithoutReasonAndWithoutE2e() {
-        final String text = ManReplyFixture.leg("ISR", "OUTMSG-1", "MREQ-1", "MND-1", "ACCP", null);
+        final String text = ManReplyFixture.leg("SBSR", "OUTMSG-1", "MREQ-1", "MND-1", "ACCP", null);
 
         final ManReply reply = MandateReplyParser.parse(text, "fnbcc01_OUTMSG-1_ISR.xml");
 
@@ -31,7 +31,7 @@ class MandateReplyParserTest {
 
     @Test
     void parsesRejectLegKeepingReason() {
-        final String text = ManReplyFixture.leg("PBSR", "OUTMSG-2", "MREQ-2", "MND-2", "RJCT", "AC04");
+        final String text = ManReplyFixture.leg("SBSR", "OUTMSG-2", "MREQ-2", "MND-2", "RJCT", "AC04");
 
         final ManReply reply = MandateReplyParser.parse(text, "fnbcc01_OUTMSG-2_PBSR.xml");
 
@@ -41,7 +41,7 @@ class MandateReplyParserTest {
 
     @Test
     void capturesEndToEndIdWhenTheReplyCarriesOne() {
-        final String text = ManReplyFixture.legWithE2e("PBSR", "OUTMSG-3", "MREQ-3", "MND-3", "E2E-9", "ACCP");
+        final String text = ManReplyFixture.legWithE2e("SBSR", "OUTMSG-3", "MREQ-3", "MND-3", "E2E-9", "ACCP");
 
         final ManReply reply = MandateReplyParser.parse(text, "fnbcc01_OUTMSG-3_PBSR.xml");
 
@@ -51,11 +51,11 @@ class MandateReplyParserTest {
     @Test
     void rejectsReplyMissingOriginalMessageId() {
         final String text = """
-                <PBSR>
+                <SBSR>
                   <MndtReqId>MREQ-4</MndtReqId>
                   <MndtId>MND-4</MndtId>
                   <MndtSts>ACCP</MndtSts>
-                </PBSR>
+                </SBSR>
                 """;
 
         assertThrows(IllegalArgumentException.class,
@@ -66,11 +66,11 @@ class MandateReplyParserTest {
     @Test
     void rejectsReplyMissingMandateRequestId() {
         final String text = """
-                <ISR>
+                <SBSR>
                   <OrgnlMsgId>OUTMSG-5</OrgnlMsgId>
                   <MndtId>MND-5</MndtId>
                   <MndtSts>ACCP</MndtSts>
-                </ISR>
+                </SBSR>
                 """;
 
         assertThrows(IllegalArgumentException.class,
