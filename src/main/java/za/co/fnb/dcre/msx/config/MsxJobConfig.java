@@ -15,11 +15,11 @@ import za.co.fnb.dcre.platform.batch.HeartbeatWriter;
 import za.co.fnb.dcre.platform.batch.OutcomeSeamListener;
 
 /**
- * MSX job shape (single tasklet, SXR clone): readerStep ingests one pain.012 SBSR
+ * MSX job shape (single tasklet, CSX clone): readerStep ingests one pain.012 SBSR
  * acceptance leg per launch into man_sbsr_resp. Identifying JobParameter:
  * arrival.id (R-16). SCRUM-91: there is NO reply.type launch arg, the leg is
- * fixed by the service (mirror of collections SXR). Runs on the default
- * SERIALIZABLE isolation (no READ COMMITTED override; only PRG carries RC per
+ * fixed by the service (mirror of collections CSX). Runs on the default
+ * SERIALIZABLE isolation (no READ COMMITTED override; only CRG carries RC per
  * SCRUM-90).
  */
 @Configuration

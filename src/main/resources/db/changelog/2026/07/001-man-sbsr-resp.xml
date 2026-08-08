@@ -5,39 +5,50 @@
         xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
         http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
 
-    <!-- SCRUM-91: MSX is the single writer of man_sbsr_resp, the pain.012 SBSR
-         acceptance-leg response table, and of NOTHING else. The isr and pbsr
-         tables moved out with their own services (MIX, MPX): one reader per leg,
-         the exact mirror of the collections ixr/sxr/pxr fleet. The merged
-         three-table changelog was MAR's shape and is the deviation this refactor
-         removes, so the reply.type launch arg is gone too: the leg is a
+    <!-- ===================================================================================
+         V1 BASELINE (SCRUM-107, owner directive 2026-08-08). THIS FILE MINTS man_sbsr_resp
+         FOR THE FIRST TIME. There is no earlier shape of it anywhere.
+
+         Every DCRE database is dropped and recreated for the direct cut-over, so no dcre_man
+         carries a MAR-era man_sbsr_resp, no checksum for this changelog was ever recorded, and
+         nothing needs converging to a current shape. The retrofit apparatus is ABSENT BY
+         DESIGN and must not be re-added: no <validCheckSum>ANY</validCheckSum>, no defensive
+         IF NOT EXISTS on the CREATE, no additive retrofit changeset moving a migrated table to
+         this shape. The final shape is the shape below.
+
+         THE TWO MARK_RAN GUARDS BELOW ARE CONVERGENCE GUARDS, NOT RETROFITS. man_sbsr_resp has
+         TWO creators on a brand-new dcre_man: this changelog, and MRG's pre-create
+         `004-bootstrap-man-sbsr-resp-mrg` in mrg db/changelog/2026/07/004-man-views.xml, which
+         MRG ships because its mnd_sbsr_pick view reads the table and MRG cannot depend on MSX
+         having migrated first. All ten M-services migrate the one dcre_man with ten independent
+         history + lock tables and NOTHING serializes them, so on an empty database either
+         writer can land first. That is exactly the condition a MARK_RAN guard is for.
+
+         MSX is the SBSR leg reader and writes NOTHING else. The isr and pbsr tables moved out
+         with their own services (MIX, MPX): one reader per leg, the exact mirror of the
+         collections cix/csx/cpx fleet. The merged three-table changelog was MAR's shape and is
+         the deviation SCRUM-91 removed, so the reply.type launch arg is gone too: the leg is a
          compile-time property of the service.
 
-         CHANGESET IDENTITY (persistence.md): this table changed owning service
-         (mar -> msx) and changelog filename, so its identity (id, author,
-         filename) is new while the TABLE may already exist on a live DB from
-         MAR's run. The MARK_RAN tableExists guard below is kept byte-identical to
-         MAR's for exactly that reason: on a migrated DB the changeset MARK_RANs
-         and never re-executes DDL, on a fresh DB it creates the table. MSX has its
-         own msx_databasechangelog history, so nothing is inherited from MAR.
-
-         One row per reply file (a pain.012 message carries exactly ONE mandate,
-         unlike the collections ISR fan-out). Replay-safe and resume-safe via
-         UNIQUE (response_file, mndt_req_id): the FULL business identity of a
-         landed reply row (the file it came in plus the mandate it answers), so
-         the guarded INSERT ... ON CONFLICT (response_file, mndt_req_id) DO NOTHING
-         is a zero-duplicate no-op on re-run (never UPSERT on the PK; CRDB resolves
-         UPSERT on PK only, persistence.md).
+         One row per reply file (a pain.012 message carries exactly ONE mandate, unlike the
+         collections ISR fan-out). Replay-safe and resume-safe via UNIQUE
+         (response_file, mndt_req_id): the FULL business identity of a landed reply row (the
+         file it came in plus the mandate it answers), so the guarded
+         INSERT ... ON CONFLICT (response_file, mndt_req_id) DO NOTHING is a zero-duplicate
+         no-op on re-run (never UPSERT on the PK; CRDB resolves UPSERT on PK only,
+         persistence.md).
          orgnl_msg_id = the outbound MsgId MSX correlates to man_outbound.out_msg_id
-         (fail-closed: an unknown outbound identity is WARNed and excluded, never
-         guessed, SCRUM-60 canon). mndt_id = the MndtId (mandate_ref), mndt_req_id =
-         the MRR-minted MndtReqId. e2e is nullable-but-forward-compatible: the
-         current synthetic pain.012 contract (A-60) carries no EndToEndId element,
-         so it is parsed opportunistically and stays NULL until the reply shape
-         carries it. status/reason are the literal MndtSts/Rsn code values (R-21:
-         code values, never enum ordinals). -->
+         (fail-closed: an unknown outbound identity is WARNed and excluded, never guessed,
+         SCRUM-60 canon). mndt_id = the MndtId (mandate_ref), mndt_req_id = the MRR-minted
+         MndtReqId. e2e is nullable-but-forward-compatible: the current synthetic pain.012
+         contract (A-60) carries no EndToEndId element, so it is parsed opportunistically and
+         stays NULL until the reply shape carries it. status/reason are the literal MndtSts/Rsn
+         code values (R-21: code values, never enum ordinals).
+         =================================================================================== -->
 
     <changeSet id="msx-001-man-sbsr-resp" author="dcre">
+        <!-- CONVERGENCE GUARD: MRG's 004-bootstrap-man-sbsr-resp-mrg creates this same table
+             and nothing orders the two services. See the file header. -->
         <preConditions onFail="MARK_RAN">
             <not><tableExists tableName="man_sbsr_resp"/></not>
         </preConditions>
@@ -63,15 +74,24 @@
     </changeSet>
 
     <!-- The unique constraint is its OWN changeset guarded on its OWN schema state
-         (persistence.md: guard each step on the schema state it transforms, not on
-         file order). Folded into the createTable changeset above, the single
-         tableExists gate MARK_RANs BOTH statements on a database that holds the
-         table WITHOUT the constraint (a half-migrated MAR state), and then every
-         runtime ON CONFLICT (response_file, mndt_req_id) dies with "there is no
-         unique or exclusion constraint matching the ON CONFLICT specification":
-         the zero-duplicate idempotency guarantee silently gone. A UNIQUE constraint
-         materialises as an index of the same name, so indexExists is the schema-state
-         probe for it. Proven by the half-migrated fixture in MsxLegacyStateIT
+         (persistence.md: guard each step on the schema state it transforms, not on file
+         order), and on a v1 database that is load-bearing in two ways.
+
+         First, MRG creates the table AND this constraint in ONE changeset gated on
+         tableExists alone. So when MSX wins the race and creates the table, MRG's whole
+         changeset MARK_RANs, the constraint never lands from MRG, and THIS changeset is its
+         only remaining writer. Folded into the createTable changeset above, the single
+         tableExists gate would MARK_RAN both statements together on any database that already
+         holds the table, and every runtime ON CONFLICT (response_file, mndt_req_id) would then
+         die with "there is no unique or exclusion constraint matching the ON CONFLICT
+         specification": the zero-duplicate idempotency guarantee silently gone.
+
+         Second, the two changesets commit separately, so a pod killed between them leaves the
+         table standing without the constraint. The restart must repair exactly that state,
+         which only a guard probing the constraint itself can see.
+
+         A UNIQUE constraint materialises as an index of the same name, so indexExists is the
+         schema-state probe for it. Both states are proven by the fixtures in MsxLegacyStateIT
          (SCRUM-91 review R5). -->
     <changeSet id="msx-001-man-sbsr-resp-uq" author="dcre">
         <preConditions onFail="MARK_RAN">

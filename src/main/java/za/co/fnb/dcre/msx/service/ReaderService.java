@@ -21,8 +21,8 @@ import java.util.UUID;
  *
  * <p>SCRUM-91: the leg is a compile-time property of the service, NOT a
  * {@code reply.type} launch arg. MSX is the SBSR leg reader, the exact mirror of
- * collections SXR; MIX and MPX are its ISR and PBSR twins. That triplication IS
- * the fleet pattern (ixr/sxr/pxr); the merged three-table reader was MAR's shape
+ * collections CSX; MIX and MPX are its ISR and PBSR twins. That triplication IS
+ * the fleet pattern (cix/csx/cpx); the merged three-table reader was MAR's shape
  * and is the deviation this refactor removes.
  *
  * <p>[SYNTHETIC-CONTRACT R-35/A-60] A pain.012 message carries exactly ONE
@@ -42,7 +42,7 @@ public class ReaderService {
 
     /**
      * The ONE response table this service owns. MSX is the SBSR leg (mirror of
-     * collections SXR). This is an ALIAS of the single literal on the entity, not a
+     * collections CSX). This is an ALIAS of the single literal on the entity, not a
      * second one: the guarded insert reads the same constant, so the leg assertion
      * and the write target cannot drift apart (SCRUM-91 review R1).
      */
@@ -57,7 +57,7 @@ public class ReaderService {
         this.respRepo = respRepo;
         // Own REQUIRES_NEW transaction per write: a CRDB 40001 abort poisons the
         // surrounding transaction (25P02 on any further statement), so each retry
-        // needs a fresh transaction (same shape as the ixr sliced ingest).
+        // needs a fresh transaction (same shape as the cix sliced ingest).
         this.sliceTx = new TransactionTemplate(txManager);
         this.sliceTx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }

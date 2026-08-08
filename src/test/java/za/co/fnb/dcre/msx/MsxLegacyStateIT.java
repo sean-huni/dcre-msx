@@ -5,15 +5,16 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * SCRUM-91 changeset-identity guard: man_sbsr_resp changed owning service (mar -> msx) and
- * changelog filename, so on a live DB the table already exists. The guarded changeset must
- * MARK_RAN, never re-execute DDL. Four fixtures: fresh DB, legacy end-state (table already
- * present from mar), half-migrated (table without the unique constraint), double-apply.
+ * SCRUM-107 v1 convergence guard: man_sbsr_resp has TWO creators on a brand-new dcre_man, this
+ * service and MRG's {@code 004-bootstrap-man-sbsr-resp-mrg}, and nothing serializes the ten
+ * M-service migrations. Whichever writer loses the race must MARK_RAN, never re-execute DDL.
+ * Four fixtures: fresh DB, MRG's pre-create already standing, the table standing without its
+ * unique constraint, double-apply.
  */
 class MsxLegacyStateIT extends AbstractCrdbIT {
 
-    /** The shape MAR's mar-001-man-sbsr-resp left behind on every already-migrated database. */
-    private static final String LEGACY_SBSR_TABLE = """
+    /** What MRG's 004-bootstrap-man-sbsr-resp-mrg leaves behind: table plus unique constraint. */
+    private static final String MRG_PRECREATED_SBSR_TABLE = """
             CREATE TABLE IF NOT EXISTS man_sbsr_resp (
               id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
               response_file VARCHAR(128) NOT NULL, orgnl_msg_id VARCHAR(35) NOT NULL,
@@ -25,14 +26,16 @@ class MsxLegacyStateIT extends AbstractCrdbIT {
               CONSTRAINT uq_man_sbsr_resp_file_mndt_req UNIQUE (response_file, mndt_req_id))""";
 
     /**
-     * The HALF-MIGRATED shape (SCRUM-91 review R5): the table stands but the unique
-     * constraint does not. One precondition guarding both statements MARK_RANs the
-     * whole changeset here, leaving the runtime ON CONFLICT (response_file,
-     * mndt_req_id) with no constraint to arbitrate on, so the idempotency guarantee
-     * is silently gone. The constraint gets its own changeset guarded on the schema
-     * state IT transforms.
+     * The table standing WITHOUT its unique constraint (SCRUM-91 review R5). Two v1 paths
+     * reach it: MSX won the table create and was killed before its own unique-constraint
+     * changeset committed, or MSX created the table and MRG's combined changeset then
+     * MARK_RANed on tableExists so the constraint never landed from MRG either. One
+     * precondition guarding both statements would MARK_RAN the whole changeset here, leaving
+     * the runtime ON CONFLICT (response_file, mndt_req_id) with no constraint to arbitrate on,
+     * so the idempotency guarantee is silently gone. The constraint gets its own changeset
+     * guarded on the schema state IT transforms.
      */
-    private static final String HALF_MIGRATED_SBSR_TABLE = """
+    private static final String SBSR_TABLE_WITHOUT_CONSTRAINT = """
             CREATE TABLE IF NOT EXISTS man_sbsr_resp (
               id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
               response_file VARCHAR(128) NOT NULL, orgnl_msg_id VARCHAR(35) NOT NULL,
@@ -49,8 +52,8 @@ class MsxLegacyStateIT extends AbstractCrdbIT {
             ON CONFLICT (response_file, mndt_req_id) DO NOTHING""";
 
     @Test
-    void aHalfMigratedTableGainsTheUniqueConstraintAndOnConflictStillArbitrates() throws Exception {
-        jdbc.execute(HALF_MIGRATED_SBSR_TABLE);
+    void aTableWithoutItsConstraintGainsItAndOnConflictStillArbitrates() throws Exception {
+        jdbc.execute(SBSR_TABLE_WITHOUT_CONSTRAINT);
 
         runLiquibase();
         runLiquibase();
@@ -68,8 +71,8 @@ class MsxLegacyStateIT extends AbstractCrdbIT {
     }
 
     @Test
-    void preCreatedSbsrTableMarksTheChangesetRan() throws Exception {
-        jdbc.execute(LEGACY_SBSR_TABLE);
+    void mrgPreCreatedSbsrTableMarksTheChangesetRan() throws Exception {
+        jdbc.execute(MRG_PRECREATED_SBSR_TABLE);
 
         runLiquibase();
         runLiquibase();
