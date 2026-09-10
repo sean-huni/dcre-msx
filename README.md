@@ -6,7 +6,7 @@ SBSR response reader for DCRE Mandates: ingests one pain.012 SBSR acceptance leg
 
 MSX is the sponsoring-bank interim leg of the mandates response flow (`MIX | MSX | MPX -> mnd_ext_status -> MRG`). Fintegrate (simulated by dcre-infra `fint_sim_reply.py --mandate`) drops a reply file into a per-client `fint-resp-man/in` exchange directory; AGT selects the reader by the `_SBSR` filename token and launches MSX as a short-lived Kubernetes Job. MSX parses the reply (one `<OrgnlMsgId>` plus `<MndtReqId>`, `<MndtId>`, `<MndtSts>` and an optional `<Rsn>`, [SYNTHETIC-CONTRACT R-35/A-60] shape), correlates it fail-closed to the MRW outbound registry, and writes exactly one `man_sbsr_resp` row. Replaying the same file is a no-op via `INSERT ... ON CONFLICT (response_file, mndt_req_id) DO NOTHING`.
 
-**Launch contract (CHANGED, SCRUM-91).** MSX takes `input.file` and `original.name` and **NO `reply.type` parameter**. The leg is a compile-time property of the service, not a launch argument: MSX only ever writes `man_sbsr_resp`. The merged three-table reader that selected its table from `reply.type` was MAR's shape, and splitting it into three single-leg readers (MIX/MSX/MPX, mirroring the collections IXR/SXR/PXR fleet) is what this refactor exists to do. A DAG cannot mis-route a leg it cannot name.
+**Launch contract (CHANGED, SCRUM-91).** MSX takes `input.file` and `original.name` and **NO `reply.type` parameter**. The leg is a compile-time property of the service, not a launch argument: MSX only ever writes `man_sbsr_resp`. The merged three-table reader that selected its table from `reply.type` was MAR's shape, and splitting it into three single-leg readers (MIX/MSX/MPX, mirroring the collections CIX/CSX/CPX fleet) is what this refactor exists to do. A DAG cannot mis-route a leg it cannot name.
 
 ## Architecture and principles
 
@@ -81,7 +81,7 @@ One Testcontainers CockroachDB container serves the whole module (`AbstractCrdbI
 
 - `MsxJobTest`: the real `msxJob` through `JobOperator` on Testcontainers CockroachDB `v26.2.3`; a job launched with nothing but the file lands the SBSR leg, a rejected leg keeps its reason code, and a replay under a fresh job instance stays at one row.
 - `MsxReaderIT`: reader proofs against real CRDB; the ingest lands in the one owned table, correlation persists every reply field, an unknown outbound identity is WARNed and excluded with nothing written, and a re-ingest is a zero-duplicate no-op preserving row identity.
-- `MsxLegacyStateIT`: migration proofs against legacy database states, not just fresh containers; fresh DB, the MAR legacy end-state, the half-migrated state (table without the unique constraint, which must gain it and keep `ON CONFLICT` working), and double-apply.
+- `MsxLegacyStateIT`: convergence proofs for the two writers of `man_sbsr_resp` on a v1 database, not just fresh containers; fresh DB, MRG's pre-create already standing (`004-bootstrap-man-sbsr-resp-mrg` lands table plus unique constraint), the table standing without the constraint (MSX won the table create and was killed before its own unique-constraint changeset, so the restart must add it and keep `ON CONFLICT` working), and double-apply.
 - `MandateReplyParserTest`: pure-parser proofs; mandatory correlation/verdict fields, optional `Rsn`, opportunistic `e2e` capture, and malformed replies failing the job.
 - `ReaderServiceLegTest`: the leg is fixed to `man_sbsr_resp` at compile time.
 - `CucumberSuiteTest`: business-readable BDD scenarios in `src/test/resources/features/msx-acceptance-reader.feature` (correlated accept, reject reason, fail-closed exclusion, malformed reply).
@@ -98,4 +98,4 @@ The image is `eclipse-temurin:25-jre-alpine`. AGT launches MSX as an ephemeral K
 
 ## Related repositories
 
-Mandates DAG: dcre-mrr, dcre-mrv, dcre-mas, dcre-mit, dcre-mir, dcre-mrw, dcre-mix, dcre-msx (this repo), dcre-mpx, dcre-mrg. Orchestrator: dcre-agt. Collections counterparts this fleet mirrors: dcre-ixr, dcre-sxr, dcre-pxr. Platform libs: dcre-platform-model, dcre-platform-files, dcre-platform-batch, dcre-platform-persistence. Support: dcre-infra, dcre-design-register, dcre-fixture-toolkit.
+Mandates DAG: dcre-mrr, dcre-mrv, dcre-mas, dcre-mit, dcre-mir, dcre-mrw, dcre-mix, dcre-msx (this repo), dcre-mpx, dcre-mrg. Orchestrator: dcre-agt. Collections counterparts this fleet mirrors: dcre-cix, dcre-csx, dcre-cpx. Platform libs: dcre-platform-model, dcre-platform-files, dcre-platform-batch, dcre-platform-persistence. Support: dcre-infra, dcre-design-register, dcre-fixture-toolkit.

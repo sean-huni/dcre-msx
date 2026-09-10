@@ -24,7 +24,7 @@ import za.co.fnb.dcre.platform.persistence.BaseEntity;
 @Table(ManSbsrRespEntity.TABLE)
 public class ManSbsrRespEntity extends BaseEntity {
 
-    /** The ONE response table this service owns. MSX is the SBSR leg (mirror of collections SXR). */
+    /** The ONE response table this service owns. MSX is the SBSR leg (mirror of collections CSX). */
     public static final String TABLE = "man_sbsr_resp";
 
     private String responseFile;
